@@ -42,7 +42,6 @@ class LibraryServiceTest {
     @DisplayName("После возврата книга становится доступной")
     fun returningBookMakesItAvailable() {
         val book = Book("1984", "George Orwell", "978-0-452-28423-4")
-
         library.addBook(book)
         library.borrowBook("978-0-452-28423-4", "Ivan")
         library.returnBook("978-0-452-28423-4")
