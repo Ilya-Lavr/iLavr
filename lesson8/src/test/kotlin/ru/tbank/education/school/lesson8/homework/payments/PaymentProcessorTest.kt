@@ -63,13 +63,13 @@ class PaymentProcessorTest {
                 "EUR",
                 "42"
             ).status
-            resultStatus == "REJECTED"
+            resultStatus != "REJECTED"
         }
 
 
-        assertFalse { validCard("506282173456789205") }
-        assertTrue { validCard("506282173456789201") }
-        assertTrue { validCard("11115235134134587") }
+        assertTrue { validCard("506282173456789205") }
+        assertFalse { validCard("506282173456789201") }
+        assertFalse { validCard("11115235134134587") }
     }
 
     @Test
@@ -91,17 +91,122 @@ class PaymentProcessorTest {
         )
         assertTrue { outputStream.toString().contains("WARNING") }
 
-        processor.processPayment( // insufficient funds
-            123,
-            "5500123412341160",
+
+
+        System.setOut(originalOut)
+    }
+
+    @Test
+    fun currencyCheck() {
+        val correctCurrency = listOf(
+            "USD",
+            "EUR",
+            "GBP",
+            "JPY",
+            "RUB"
+        )
+
+        for (cur in correctCurrency) {
+            assertTrue {
+                processor.processPayment(
+                    100,
+                    "506282173456789205",
+                    1,
+                    2027,
+                    cur,
+                    "42"
+                ).status.contains("SUCCESS")
+            }
+        }
+    }
+
+    @Test
+    fun gatewayResultCheck() {
+        assertTrue {
+            processor.processPayment(
+                100001,
+                "506282173456789205",
+                11,
+                2025,
+                "USD",
+                "42"
+            ).message.contains("Transaction limit exceeded")
+        }
+        assertTrue {
+            processor.processPayment(
+                100,
+                "5500123412341160",
+                11,
+                2025,
+                "USD",
+                "42"
+            ).message.contains("Insufficient funds")
+        }
+        assertTrue {
+            processor.processPayment(
+                34,
+                "506282173456789205",
+                11,
+                2025,
+                "USD",
+                "42"
+            ).message.contains("Gateway timeout")
+        }
+    }
+
+    @Test
+    fun bulkProcessCheck() {
+        assertTrue { processor.bulkProcess(emptyList()).isEmpty() }
+        val paymentInvalid = PaymentData(
+            0,
+            "",
+            0,
+            0,
+            "",
+            ""
+        )
+        assertTrue { processor.bulkProcess(listOf(paymentInvalid))[0].status == "REJECTED" }
+        val paymentValid = PaymentData(
+            100,
+            "506282173456789205",
             1,
             2027,
             "EUR",
             "42"
         )
-        assertTrue { outputStream.toString().contains("insufficient funds") }
-        assertTrue {  }
+        assertTrue { processor.bulkProcess(listOf(paymentValid))[0].status == "SUCCESS" }
+    }
 
-        System.setOut(originalOut)
+    @Test
+    fun calculateLoyaltyDiscountCheck() {
+        assertThrows(IllegalArgumentException::class.java) {
+            processor.calculateLoyaltyDiscount(0, 0)
+        }
+        assertTrue {
+            processor.calculateLoyaltyDiscount(10000, 1000000) == 5000 &&
+            processor.calculateLoyaltyDiscount(10000, 5000) == 1000 &&
+            processor.calculateLoyaltyDiscount(5000, 100000000) == 3000 &&
+            processor.calculateLoyaltyDiscount(5000, 20000) == 3000 &&
+            processor.calculateLoyaltyDiscount(2000, 1000000000) == 1500 &&
+            processor.calculateLoyaltyDiscount(2000, 10000) == 1000 &&
+            processor.calculateLoyaltyDiscount(500, 1000000000) == 500 &&
+            processor.calculateLoyaltyDiscount(500, 2000) == 100 &&
+            processor.calculateLoyaltyDiscount(10, 1000000) == 0
+
+        }
+    }
+
+    @Test
+    fun test84to90() {
+        val payment = PaymentData(
+            100001,
+            "506282173456789205",
+            11,
+            2025,
+            "USD",
+            "42"
+        )
+
+        assertTrue { processor.bulkProcess(listOf(payment))[0].status == "FAILED" }
     }
 }
